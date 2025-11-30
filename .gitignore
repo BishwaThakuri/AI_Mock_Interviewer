@@ -1,14 +1,34 @@
-# Python
+# --- Python Backend ---
 __pycache__/
 *.py[cod]
+*$py.class
 venv/
 .env
+.venv
+env/
+# IMPORTANT: Ignore the local SQLite database
+*.db
+*.sqlite3
+interviewer.db
 
-# Node / Frontend
+# --- React / Vite Frontend ---
 node_modules/
 dist/
-.DS_Store
+build/
+*.local
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json # OPTIONAL: Keep this if you want to lock versions, ignore if you want flexibility. usually KEEP it.
 
-# IDE
+# --- Testing & Code Quality ---
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# --- IDE & OS ---
 .vscode/
 .idea/
+Thumbs.db      # Windows
