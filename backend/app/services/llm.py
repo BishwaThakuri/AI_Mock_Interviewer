@@ -57,3 +57,43 @@ def generate_questions(resume_text: str, job_role: str = "Software Engineer"):
     except Exception as e:
         print(f"AI Error: {e}")
         return ["Error generating questions. Please check the backend logs."]
+    
+def grade_answer(question: str, user_answer: str):
+    system_prompt = f"""
+    You are a Senior Technical Interviewer.
+    
+    Question Asked: "{question}"
+    Candidate's Answer (Transcribed via Speech-to-Text): "{user_answer}"
+    
+    **GRADING INSTRUCTIONS:**
+    1. The candidate's answer was transcribed from audio. **Ignore minor phonetic errors** (e.g., "Java Script" vs "JavaScript", "Sequel" vs "SQL", "Liquid" vs "Eloquent").
+    2. Focus on the **technical accuracy** and the **logic** of the answer.
+    3. If the user makes a valid point but uses the wrong pronunciation/transcription, give them credit.
+    
+    Task:
+    1. Grade the answer on a scale of 1-10.
+    2. Provide 1-2 sentences of specific feedback.
+    
+    OUTPUT FORMAT (JSON ONLY):
+    {{"score": 7, "feedback": "Feedback text here."}}
+    """
+    
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+            ],
+            model="llama-3.3-70b-versatile",
+            temperature=0.5,
+        )
+        
+        response = chat_completion.choices[0].message.content
+        
+        # Simple JSON extraction
+        start = response.find('{')
+        end = response.rfind('}') + 1
+        return json.loads(response[start:end])
+        
+    except Exception as e:
+        print(f"Grading Error: {e}")
+        return {"score": 0, "feedback": "Error grading answer."}
