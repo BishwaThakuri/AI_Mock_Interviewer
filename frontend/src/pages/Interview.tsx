@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
-import { Mic, Square, Send, User, Bot, Loader2 } from 'lucide-react';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Mic, Square, Send, Bot, Loader2, Home } from 'lucide-react';
 import { api } from '../api/client';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import type { ChatMessage } from '../types';
@@ -8,17 +8,18 @@ import type { ChatMessage } from '../types';
 export const Interview = () => {
   const { sessionId } = useParams();
   const location = useLocation();
-  // We get the initial questions passed from the Welcome screen
+  const navigate = useNavigate(); 
   const initialQuestions = location.state?.questions || [];
   
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [processing, setProcessing] = useState(false);
+  const [isFinished, setIsFinished] = useState(false);
   
   const { isRecording, startRecording, stopRecording, audioBlob, setAudioBlob } = useAudioRecorder();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Chat with the first AI Question
+  // Initialize Chat
   useEffect(() => {
     if (initialQuestions.length > 0 && messages.length === 0) {
       setMessages([
@@ -31,7 +32,7 @@ export const Interview = () => {
     }
   }, [initialQuestions]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -43,27 +44,22 @@ export const Interview = () => {
     const currentQuestion = initialQuestions[currentQuestionIndex];
     setProcessing(true);
 
-    // Add temporary "User Audio" bubble
     const userMsgId = Date.now().toString();
     setMessages(prev => [...prev, { id: userMsgId, sender: 'user', text: "🎤 Audio Answer Submitted...", isAudio: true }]);
 
     try {
-      // Send to Backend
       const response = await api.submitAnswer(Number(sessionId), currentQuestion, audioBlob);
 
-      // Update User Bubble with Transcription & Score
       setMessages(prev => prev.map(msg => 
         msg.id === userMsgId 
           ? { ...msg, text: response.transcription, score: response.score, feedback: response.feedback }
           : msg
       ));
 
-      // Move to next question?
       if (currentQuestionIndex < initialQuestions.length - 1) {
         const nextQ = initialQuestions[currentQuestionIndex + 1];
         setCurrentQuestionIndex(prev => prev + 1);
         
-        // Add AI's next question after a short delay
         setTimeout(() => {
           setMessages(prev => [...prev, {
             id: Date.now().toString(),
@@ -72,12 +68,14 @@ export const Interview = () => {
           }]);
         }, 1000);
       } else {
+        // --- INTERVIEW FINISHED LOGIC ---
         setTimeout(() => {
           setMessages(prev => [...prev, {
             id: 'end',
             sender: 'ai',
             text: "That concludes our interview! Great job. Check your scores above."
           }]);
+          setIsFinished(true);
         }, 1000);
       }
 
@@ -86,21 +84,32 @@ export const Interview = () => {
       alert("Error submitting answer. Check backend console.");
     } finally {
       setProcessing(false);
-      setAudioBlob(null); // Clear recorded audio
+      setAudioBlob(null);
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 max-w-4xl mx-auto shadow-2xl overflow-hidden">
       
-      {/* Header */}
+      {/* Header with Home Button */}
       <div className="bg-white border-b p-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-2">
           <Bot className="text-blue-600 h-6 w-6" />
           <h1 className="font-bold text-xl text-gray-800">AI Interviewer</h1>
         </div>
-        <div className="text-sm text-gray-500">
-          Question {currentQuestionIndex + 1} of {initialQuestions.length}
+        
+        <div className="flex items-center gap-4">
+            <div className="text-sm text-gray-500 hidden sm:block">
+            Question {currentQuestionIndex + 1} of {initialQuestions.length}
+            </div>
+            {/* Home Button */}
+            <button 
+                onClick={() => navigate('/')}
+                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all"
+                title="Back to Home"
+            >
+                <Home className="h-6 w-6" />
+            </button>
         </div>
       </div>
 
@@ -113,7 +122,6 @@ export const Interview = () => {
             }`}>
               <p className="whitespace-pre-wrap">{msg.text}</p>
               
-              {/* Score Badge (Only for User) */}
               {msg.score !== undefined && (
                 <div className="mt-3 pt-3 border-t border-blue-400/30">
                   <div className="flex items-center justify-between mb-1">
@@ -130,7 +138,6 @@ export const Interview = () => {
             </div>
           </div>
         ))}
-        {/* Invisible div to scroll to */}
         <div ref={messagesEndRef} />
       </div>
 
@@ -138,44 +145,58 @@ export const Interview = () => {
       <div className="bg-white border-t p-6">
         <div className="flex flex-col items-center gap-4">
           
-          {/* Status Text */}
-          <div className="h-6 text-sm font-medium text-gray-500">
-            {processing ? "AI is thinking..." : isRecording ? "Recording... (Speak now)" : audioBlob ? "Ready to Submit" : "Ready to Record"}
-          </div>
+          {/* Conditional Rendering: Show Controls OR 'Start New' button */}
+          {!isFinished ? (
+            <>
+                <div className="h-6 text-sm font-medium text-gray-500">
+                    {processing ? "AI is thinking..." : isRecording ? "Recording... (Speak now)" : audioBlob ? "Ready to Submit" : "Ready to Record"}
+                </div>
 
-          {/* Buttons */}
-          <div className="flex items-center gap-4">
-            {!audioBlob ? (
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`p-6 rounded-full transition-all shadow-lg ${
-                  isRecording 
-                    ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                {isRecording ? <Square className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
-              </button>
-            ) : (
-              /* If audio is recorded, show Submit button */
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setAudioBlob(null)} // Cancel/Retry
-                  className="px-6 py-3 rounded-full text-gray-600 hover:bg-gray-100 font-medium"
-                >
-                  Retry
-                </button>
+                <div className="flex items-center gap-4">
+                    {!audioBlob ? (
+                    <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`p-6 rounded-full transition-all shadow-lg ${
+                        isRecording 
+                            ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                    >
+                        {isRecording ? <Square className="h-8 w-8 text-white" /> : <Mic className="h-8 w-8 text-white" />}
+                    </button>
+                    ) : (
+                    <div className="flex gap-4">
+                        <button 
+                        onClick={() => setAudioBlob(null)} 
+                        className="px-6 py-3 rounded-full text-gray-600 hover:bg-gray-100 font-medium"
+                        >
+                        Retry
+                        </button>
+                        <button
+                        onClick={handleSubmitAnswer}
+                        disabled={processing}
+                        className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-full font-bold shadow-lg flex items-center gap-2"
+                        >
+                        {processing ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
+                        Submit Answer
+                        </button>
+                    </div>
+                    )}
+                </div>
+            </>
+          ) : (
+            /* FINISHED STATE */
+            <div className="text-center space-y-3">
+                <p className="text-green-600 font-medium">Interview Complete!</p>
                 <button
-                  onClick={handleSubmitAnswer}
-                  disabled={processing}
-                  className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-full font-bold shadow-lg flex items-center gap-2"
+                    onClick={() => navigate('/')}
+                    className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg flex items-center gap-2 transition-transform hover:scale-105"
                 >
-                  {processing ? <Loader2 className="animate-spin" /> : <Send className="h-5 w-5" />}
-                  Submit Answer
+                    <Home className="h-5 w-5" />
+                    Start New Interview
                 </button>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
           
         </div>
       </div>
